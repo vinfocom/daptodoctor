@@ -8,7 +8,7 @@ import { getChatMessages, sendChatMessage, uploadChatAttachment } from '../api/c
 import { io, type Socket } from 'socket.io-client';
 import { SOCKET_URL } from '../config/env';
 import { useNotificationSound } from '../hooks/useNotificationSound';
-import { markPatientDoctorChatRead } from '../lib/mobileNotificationState';
+import { markDoctorPatientChatRead } from '../lib/mobileNotificationState';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
@@ -77,7 +77,7 @@ export default function ChatScreen({ route, navigation }: Props) {
         try {
             const data = await getChatMessages(patientId, doctorId);
             setMessages((prev) => mergeMessages(prev, data.messages || []));
-            markPatientDoctorChatRead(doctorId);
+            markDoctorPatientChatRead(patientId);
         } catch (e) {
             console.error('Failed to fetch messages:', e);
         } finally {
@@ -86,7 +86,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     };
 
     useEffect(() => {
-        markPatientDoctorChatRead(doctorId);
+        markDoctorPatientChatRead(patientId);
         fetchMessages();
         const interval = setInterval(fetchMessages, 3000);
         return () => clearInterval(interval);
@@ -112,7 +112,7 @@ export default function ChatScreen({ route, navigation }: Props) {
             const isOurMessage = data.sender === 'DOCTOR';
             if (!isOurMessage) playSound();
             if (data.sender === 'DOCTOR') {
-                markPatientDoctorChatRead(doctorId);
+                markDoctorPatientChatRead(patientId);
             }
             setMessages((prev) => mergeMessages(prev, [data]));
         });

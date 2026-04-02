@@ -3,7 +3,6 @@ import {
     View,
     Text,
     ActivityIndicator,
-    Alert,
     ScrollView,
     TouchableOpacity,
     StatusBar,
@@ -13,16 +12,8 @@ import {
 import {
     User,
     Phone,
-    Stethoscope,
-    FileText,
     MessageCircle,
-    LogOut,
-    PhoneOff,
-    Award,
-    Hash,
     Briefcase,
-    Clock,
-    CalendarCheck2,
     ArrowRight,
     CheckCircle2,
     CalendarClock,
@@ -31,7 +22,6 @@ import {
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { getProfile } from '../api/auth';
 import { getAppointments } from '../api/appointments';
-import { removeToken } from '../api/token';
 import { getChatNotifications } from '../api/notifications';
 import { useSWRLite } from '../lib/useSWRLite';
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
@@ -62,43 +52,13 @@ const InfoCard = ({ icon, label, value }: { icon: React.ReactNode; label: string
     </View>
 );
 
-const QuickActionButton = ({
-    icon,
-    label,
-    onPress,
-    color,
-}: {
-    icon: string;
-    label: string;
-    onPress: () => void;
-    color: string;
-}) => (
-    <TouchableOpacity
-        onPress={onPress}
-        activeOpacity={0.7}
-        className="flex-1 items-center rounded-2xl py-4 mx-1"
-        style={{
-            backgroundColor: color,
-            shadowColor: color,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 6,
-            elevation: 4,
-        }}
-    >
-        <Text style={{ fontSize: 22 }} className="mb-1">{icon}</Text>
-        <Text className="text-white font-bold text-xs text-center">{label}</Text>
-    </TouchableOpacity>
-);
-
 const DashboardScreen = () => {
     const navigation = useNavigation<DashboardScreenNavigationProp>();
     const isFocused = useIsFocused();
-    const { role, staff_role, name, email, clearSession, refreshSession } = useAuthSession();
+    const { role, staff_role, name, email, refreshSession } = useAuthSession();
     const isClinicStaff = role === 'CLINIC_STAFF';
     const getClinicStaffProfile = React.useCallback(async () => ({ doctor: null }), []);
     const [refreshing, setRefreshing] = useState(false);
-    const [notifCount, setNotifCount] = useState(0);
     const [announcementNotifCount, setAnnouncementNotifCount] = useState(0);
     const [unreadSenders, setUnreadSenders] = useState<Map<number, { patientName: string; doctorId: number }>>(new Map());
     const lastNotifCheckAtRef = useRef<string>(new Date(Date.now() - 60 * 1000).toISOString());
@@ -128,13 +88,17 @@ const DashboardScreen = () => {
             const all = await getAppointments({ date: todayStr });
             const list = Array.isArray(all) ? all : (all?.appointments || []);
             setUpcomingToday(list);
-        } catch { console.log("Error loading upcoming appointments"); } finally { setUpcomingLoading(false); }
+        } catch { } finally { setUpcomingLoading(false); }
     }, []);
 
     useEffect(() => { loadUpcoming(); }, [loadUpcoming]);
 
     useFocusEffect(
         React.useCallback(() => {
+            if (isClinicStaff) {
+                setUnreadSenders(new Map());
+                setAnnouncementNotifCount(0);
+            }
             const readPatientIds = consumeDoctorReadPatientIds();
             const latestDoctorChatsReadAt = getDoctorChatsReadAt();
             if (latestDoctorChatsReadAt > 0) {
@@ -149,10 +113,6 @@ const DashboardScreen = () => {
                     return next;
                 });
             }
-            setNotifCount((prev) => {
-                const remainingCount = Math.max(0, unreadSenders.size - readPatientIds.length);
-                return readPatientIds.length > 0 ? remainingCount : prev;
-            });
             if (isClinicStaff) {
                 refreshSession().catch(() => {
                     // ignore focus refresh errors
@@ -162,16 +122,16 @@ const DashboardScreen = () => {
             revalidateProfile().catch(() => {
                 // ignore focus refresh errors
             });
-        }, [isClinicStaff, refreshSession, revalidateProfile, unreadSenders.size])
+        }, [isClinicStaff, refreshSession, revalidateProfile])
     );
 
     useEffect(() => {
+        if (isClinicStaff) return;
         const checkNotifications = async () => {
             if (!isFocused) return;
             try {
                 const data = await getChatNotifications(lastNotifCheckAtRef.current);
                 lastNotifCheckAtRef.current = new Date().toISOString();
-                setNotifCount((prev) => prev + (data?.count || 0));
                 setAnnouncementNotifCount((prev) => prev + (data?.announcementCount || 0));
                 if (data?.uniqueSenders?.length) {
                     setUnreadSenders((prev) => {
@@ -201,11 +161,15 @@ const DashboardScreen = () => {
             await checkNotifications();
         }, 12000);
         return () => clearInterval(interval);
-    }, [isFocused]);
+    }, [isClinicStaff, isFocused]);
 
     const clearUnreadChatIndicators = React.useCallback(() => {
         setUnreadSenders(new Map());
-        setNotifCount(0);
+        lastNotifCheckAtRef.current = new Date().toISOString();
+    }, []);
+
+    const clearAnnouncementIndicators = React.useCallback(() => {
+        setAnnouncementNotifCount(0);
         lastNotifCheckAtRef.current = new Date().toISOString();
     }, []);
 
@@ -222,21 +186,6 @@ const DashboardScreen = () => {
             setRefreshing(false);
         }
     }, [isClinicStaff, loadUpcoming, refreshSession, revalidateProfile]);
-
-    const handleLogout = React.useCallback(() => {
-        Alert.alert('Logout', 'Are you sure you want to logout?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Logout',
-                style: 'destructive',
-                onPress: async () => {
-                    await removeToken();
-                    clearSession();
-                    navigation.replace('Login');
-                },
-            },
-        ]);
-    }, [clearSession, navigation]);
 
     const handleManageStaff = React.useCallback(() => {
         navigation.navigate('StaffList');
@@ -301,7 +250,7 @@ const DashboardScreen = () => {
 
                 <View className="px-5 mt-6">
                     {/* Smart notification banner */}
-                    {(unreadSenders.size > 0 || announcementNotifCount > 0) && (
+                    {!isClinicStaff && (unreadSenders.size > 0 || announcementNotifCount > 0) && (
                         <Animated.View entering={FadeInUp.delay(160).duration(400)} className="mb-4">
                             {unreadSenders.size > 0 && (() => {
                                 const senders = [...unreadSenders.entries()];
@@ -347,11 +296,18 @@ const DashboardScreen = () => {
                                 );
                             })()}
                             {announcementNotifCount > 0 && (
-                                <View className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mt-2">
+                                <TouchableOpacity
+                                    activeOpacity={0.8}
+                                    onPress={() => {
+                                        clearAnnouncementIndicators();
+                                        navigation.navigate('DoctorAnnouncements');
+                                    }}
+                                    className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mt-2"
+                                >
                                     <Text className="text-blue-700 text-sm font-semibold">
                                         Announcements: {announcementNotifCount} new
                                     </Text>
-                                </View>
+                                </TouchableOpacity>
                             )}
                         </Animated.View>
                     )}
@@ -361,7 +317,10 @@ const DashboardScreen = () => {
                             <Animated.Text entering={FadeInUp.delay(200).duration(500)} className="text-gray-700 font-bold text-base mb-3">Quick Actions</Animated.Text>
                             <Animated.View entering={FadeInUp.delay(240).duration(500)} className="mb-5" style={{ gap: 10 }}>
                                 <TouchableOpacity
-                                    onPress={() => navigation.navigate('DoctorAnnouncements')}
+                                    onPress={() => {
+                                        clearAnnouncementIndicators();
+                                        navigation.navigate('DoctorAnnouncements');
+                                    }}
                                     className="bg-blue-600 rounded-2xl py-4 px-4 flex-row items-center justify-between"
                                     style={{ shadowColor: '#1d4ed8', shadowOpacity: 0.25, shadowRadius: 8, elevation: 5 }}
                                 >

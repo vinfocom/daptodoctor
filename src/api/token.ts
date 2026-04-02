@@ -1,8 +1,8 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const TOKEN_KEY = 'auth_token';
-const ROLE_KEY = 'auth_role';
+const TOKEN_KEY = 'daptodoctor_auth_token';
+const ROLE_KEY = 'daptodoctor_auth_role';
 
 export type AppRole = 'DOCTOR' | 'CLINIC_STAFF';
 

@@ -46,7 +46,7 @@
       "package": "com.harshit.daptodoctor"
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/daptodoctor-favicon.png",
       "bundler": "metro"
     },

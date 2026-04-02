@@ -1,49 +1,161 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { TabActions, useNavigation, type NavigationProp } from '@react-navigation/native';
+import { Home, Calendar, Stethoscope, Users, BarChart2, ShieldAlert } from 'lucide-react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 
-import type { DoctorTabParamList } from './types';
-import AppointmentsScreen from '../screens/AppointmentsScreen';
-import CalendarScreen from '../screens/CalendarScreen';
-import ClinicsScreen from '../screens/ClinicsScreen';
+import type { MainTabParamList } from './types';
 import DashboardScreen from '../screens/DashboardScreen';
-import PatientsScreen from '../screens/Patients';
+import AppointmentsScreen from '../screens/AppointmentsScreen';
+import ClinicsScreen from '../screens/ClinicsScreen';
+import CalendarScreen from '../screens/CalendarScreen';
+import Patients from '../screens/Patients';
+import { getChatNotifications } from '../api/notifications';
+import { useAuthSession } from '../context/AuthSessionContext';
 
-const Tab = createBottomTabNavigator<DoctorTabParamList>();
+const Tab = createBottomTabNavigator<MainTabParamList>();
+
+function SwipeTabScreen({
+  ScreenComponent,
+  currentTab,
+  tabOrder,
+}: {
+  ScreenComponent: React.ComponentType;
+  currentTab: keyof MainTabParamList;
+  tabOrder: (keyof MainTabParamList)[];
+}) {
+  const navigation = useNavigation<NavigationProp<MainTabParamList>>();
+
+  const moveToTab = React.useCallback(
+    (delta: -1 | 1) => {
+      const currentIndex = tabOrder.indexOf(currentTab);
+      if (currentIndex < 0) return;
+      const nextIndex = currentIndex + delta;
+      if (nextIndex < 0 || nextIndex >= tabOrder.length) return;
+      navigation.dispatch(TabActions.jumpTo(tabOrder[nextIndex]));
+    },
+    [currentTab, navigation, tabOrder]
+  );
+
+  const swipeGesture = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-24, 24])
+        .failOffsetY([-18, 18])
+        .onEnd((event) => {
+          const openNext = event.translationX < -76 || event.velocityX < -800;
+          const openPrev = event.translationX > 76 || event.velocityX > 800;
+          if (openNext) runOnJS(moveToTab)(1);
+          if (openPrev) runOnJS(moveToTab)(-1);
+        }),
+    [moveToTab]
+  );
+
+  return (
+    <GestureDetector gesture={swipeGesture}>
+      <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+        <ScreenComponent />
+      </View>
+    </GestureDetector>
+  );
+}
 
 export default function TabNavigator() {
+  const { role } = useAuthSession();
+  const isClinicStaff = role === 'CLINIC_STAFF';
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const lastNotifCheckAtRef = useRef(new Date(Date.now() - 60 * 1000).toISOString());
+  const tabOrder = React.useMemo<(keyof MainTabParamList)[]>(
+    () => (isClinicStaff ? ['Dashboard', 'Appointments'] : ['Dashboard', 'Appointments', 'Clinics', 'Patients', 'CalendarView']),
+    [isClinicStaff]
+  );
+
+  useEffect(() => {
+    const checkUnread = async () => {
+      try {
+        const data = await getChatNotifications(lastNotifCheckAtRef.current);
+        lastNotifCheckAtRef.current = new Date().toISOString();
+        if (data?.count > 0) {
+          setUnreadChatCount((prev) => Math.min(999, prev + data.count));
+        }
+      } catch {
+        // ignore periodic notification errors
+      }
+    };
+
+    checkUnread();
+    const interval = setInterval(checkUnread, 9000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#1d4ed8',
-        tabBarInactiveTintColor: '#64748b',
-      }}
-    >
-      <Tab.Screen
-        name="Dashboard"
-        options={{ title: 'Dashboard' }}
-        component={DashboardScreen}
-      />
-      <Tab.Screen
-        name="Appointments"
-        options={{ title: 'Appointments' }}
-        component={AppointmentsScreen}
-      />
-      <Tab.Screen
-        name="Clinics"
-        options={{ title: 'Clinics' }}
-        component={ClinicsScreen}
-      />
-      <Tab.Screen
-        name="Patients"
-        options={{ title: 'Patients' }}
-        component={PatientsScreen}
-      />
-      <Tab.Screen
-        name="CalendarView"
-        options={{ title: 'Trends' }}
-        component={CalendarScreen}
-      />
-    </Tab.Navigator>
+    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+      <Tab.Navigator
+        detachInactiveScreens={false}
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          lazy: false,
+          animation: 'shift',
+          sceneStyle: { backgroundColor: '#f9fafb' },
+          tabBarStyle: { backgroundColor: '#ffffff', borderTopColor: '#e5e7eb', borderTopWidth: 1 },
+          tabBarIcon: ({ color, size }) => {
+            let IconComponent;
+
+            if (route.name === 'Dashboard') {
+              IconComponent = Home;
+            } else if (route.name === 'Appointments') {
+              IconComponent = Calendar;
+            } else if (route.name === 'Clinics') {
+              IconComponent = Stethoscope;
+            } else if (route.name === 'Patients') {
+              IconComponent = Users;
+            } else if (route.name === 'CalendarView') {
+              IconComponent = BarChart2;
+            } else {
+              IconComponent = ShieldAlert;
+            }
+
+            return <IconComponent size={size} color={color} />;
+          },
+          tabBarActiveTintColor: '#007bff',
+          tabBarInactiveTintColor: 'gray',
+        })}
+      >
+        <Tab.Screen name="Dashboard">
+          {() => <SwipeTabScreen ScreenComponent={DashboardScreen} currentTab="Dashboard" tabOrder={tabOrder} />}
+        </Tab.Screen>
+        <Tab.Screen name="Appointments">
+          {() => <SwipeTabScreen ScreenComponent={AppointmentsScreen} currentTab="Appointments" tabOrder={tabOrder} />}
+        </Tab.Screen>
+        {!isClinicStaff && (
+          <Tab.Screen name="Clinics">
+            {() => <SwipeTabScreen ScreenComponent={ClinicsScreen} currentTab="Clinics" tabOrder={tabOrder} />}
+          </Tab.Screen>
+        )}
+        {!isClinicStaff && (
+          <Tab.Screen
+            name="Patients"
+            options={{
+              title: 'Patients',
+              tabBarBadge: unreadChatCount > 0 ? (unreadChatCount > 99 ? '99+' : unreadChatCount) : undefined,
+            }}
+            listeners={{
+              tabPress: () => {
+                setUnreadChatCount(0);
+              },
+            }}
+          >
+            {() => <SwipeTabScreen ScreenComponent={Patients} currentTab="Patients" tabOrder={tabOrder} />}
+          </Tab.Screen>
+        )}
+        {!isClinicStaff && (
+          <Tab.Screen name="CalendarView" options={{ title: 'Trends' }}>
+            {() => <SwipeTabScreen ScreenComponent={CalendarScreen} currentTab="CalendarView" tabOrder={tabOrder} />}
+          </Tab.Screen>
+        )}
+      </Tab.Navigator>
+    </View>
   );
 }

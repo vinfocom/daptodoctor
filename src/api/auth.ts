@@ -97,7 +97,9 @@ async function saveDoctorPushTokenWithRetry(pushToken: string, authToken?: strin
       if (__DEV__) {
         console.log(`[push] doctor push token save attempt ${attempt} failed`, details);
       }
-      console.warn('[push] doctor push token save failed', details);
+      if (__DEV__) {
+        console.warn('[push] doctor push token save failed', details);
+      }
 
       if (attempt === maxAttempts) {
         throw error;
