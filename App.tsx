@@ -88,6 +88,7 @@ export default function App() {
 
   useEffect(() => {
     if (!Notifications || !bootRole) return;
+    const canUseDoctorChat = bootRole === 'DOCTOR';
 
     const openDoctorNotification = (data?: Record<string, unknown> | null) => {
       const target = parseDoctorNotificationTarget(data);
@@ -100,6 +101,11 @@ export default function App() {
 
       if (target.kind === 'announcement') {
         navigationRef.navigate('DoctorAnnouncements');
+        setPendingNotificationData(null);
+        return;
+      }
+
+      if (!canUseDoctorChat) {
         setPendingNotificationData(null);
         return;
       }
@@ -119,6 +125,7 @@ export default function App() {
       .catch(() => undefined);
 
     const receiveSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      if (!canUseDoctorChat) return;
       const data = notification.request.content.data as Record<string, unknown> | undefined;
       const unreadPatientId = getDoctorUnreadPatientIdFromNotification(data);
       if (unreadPatientId) {
@@ -144,6 +151,11 @@ export default function App() {
 
     if (target.kind === 'announcement') {
       navigationRef.navigate('DoctorAnnouncements');
+      setPendingNotificationData(null);
+      return;
+    }
+
+    if (bootRole !== 'DOCTOR') {
       setPendingNotificationData(null);
       return;
     }

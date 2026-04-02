@@ -65,6 +65,7 @@ function SwipeTabScreen({
 export default function TabNavigator() {
   const { role } = useAuthSession();
   const isClinicStaff = role === 'CLINIC_STAFF';
+  const canUseDoctorChat = role === 'DOCTOR';
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const lastNotifCheckAtRef = useRef(new Date(Date.now() - 60 * 1000).toISOString());
   const tabOrder = React.useMemo<(keyof MainTabParamList)[]>(
@@ -73,6 +74,11 @@ export default function TabNavigator() {
   );
 
   useEffect(() => {
+    if (!canUseDoctorChat) {
+      setUnreadChatCount(0);
+      return;
+    }
+
     const checkUnread = async () => {
       try {
         const data = await getChatNotifications(lastNotifCheckAtRef.current);
@@ -88,7 +94,7 @@ export default function TabNavigator() {
     checkUnread();
     const interval = setInterval(checkUnread, 9000);
     return () => clearInterval(interval);
-  }, []);
+  }, [canUseDoctorChat]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
