@@ -89,7 +89,6 @@ const Patients = () => {
         });
     }, []);
 
-    // Poll for new notifications and mark which patients have unread messages
     const checkNotifications = useCallback(async () => {
         if (!isFocused) return;
         try {
@@ -111,7 +110,6 @@ const Patients = () => {
         return () => clearInterval(interval);
     }, [checkNotifications, isFocused]);
 
-    // WebSocket: listen for incoming patient messages and mark unread
     useEffect(() => {
         if (!isFocused) return;
         if (!patients.length) return;
@@ -152,14 +150,14 @@ const Patients = () => {
 
     const handleCreatePatient = async () => {
         if (!formData.full_name || !formData.phone || !formData.age) {
-            Alert.alert("Error", "Please fill name, phone, and age fields");
+            Alert.alert('Error', 'Please fill name, phone, and age fields');
             return;
         }
 
         setSubmitting(true);
         try {
             await createPatient(formData);
-            Alert.alert("Success", "Patient added successfully");
+            Alert.alert('Success', 'Patient added successfully');
             setModalVisible(false);
             setFormData({
                 full_name: '',
@@ -171,7 +169,7 @@ const Patients = () => {
             });
             fetchPatients();
         } catch (e) {
-            Alert.alert("Error", "Failed to add patient");
+            Alert.alert('Error', 'Failed to add patient');
             console.error(e);
         } finally {
             setSubmitting(false);
@@ -198,7 +196,6 @@ const Patients = () => {
             return;
         }
 
-        // Clear the unread badge for this patient when opening chat
         markDoctorPatientChatRead(patientId);
         lastNotifCheckAtRef.current = new Date().toISOString();
 
@@ -208,7 +205,6 @@ const Patients = () => {
             patientName: item?.full_name || 'Unknown Patient',
         });
     };
-
 
     if (loading) {
         return (
@@ -221,71 +217,74 @@ const Patients = () => {
 
     const renderItem = ({ item, index }: { item: any; index: number }) => {
         const isNew = item.patient_type === 'NEW';
+        const patientId = Number(item.patient_id);
+        const hasUnread = unreadPatientIds.has(patientId);
 
         return (
             <AnimatedListItem index={index}>
-                <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => handleOpenChat(item)}
+                <View
                     className="bg-white rounded-2xl mb-4 overflow-hidden"
                     style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
                 >
-                    <View className="bg-emerald-900/90 px-3 py-2 border-b border-emerald-500">
+                    <View className="bg-emerald-900/90 px-3 py-2">
                         <View className="flex-row items-center">
-                            <View className="bg-white w-8 h-8 rounded-full items-center justify-center mr-2.5 relative">
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('PatientDetails', { patientId: item.patient_id })}
+                                activeOpacity={0.8}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                className="bg-white w-8 h-8 rounded-full items-center justify-center mr-2.5 relative"
+                            >
                                 <User size={16} color="#043f2cff" />
-                                {unreadPatientIds.has(Number(item.patient_id)) && (
+                                {hasUnread && (
                                     <View className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 items-center justify-center border border-white">
                                         <Text className="text-white text-[8px] font-bold">!</Text>
                                     </View>
                                 )}
-                            </View>
+                            </TouchableOpacity>
                             <View className="flex-1">
-                                <Text className="text-white font-bold text-sm" numberOfLines={1}>
+                                <Text className="text-white font-bold text-base" numberOfLines={1}>
                                     {item.full_name || 'Unknown Patient'}
                                 </Text>
-                                <Text className="text-emerald-100 text-[11px] mt-0.5">
-                                    {item.gender || 'N/A'} â€¢ {item.age ? `${item.age} yrs` : 'Age N/A'}
-                                </Text>
+                                <View className="flex-row items-center mt-0.5">
+                                    <Text className="text-emerald-100 text-sm">
+                                        {item.gender || 'N/A'} {' • '} {item.age ? `${item.age} yrs` : 'Age N/A'}
+                                    </Text>
+                                    <View className="flex-row items-center ml-2 flex-1">
+                                        <Text className="text-emerald-100 text-sm mr-1">•</Text>
+                                        <Phone size={10} color="#d1fae5" />
+                                        <Text className="text-emerald-100 text-sm ml-1 flex-1" numberOfLines={1}>
+                                            {item.phone || 'No phone'}
+                                        </Text>
+                                    </View>
+                                </View>
                             </View>
-                            <View className={`px-2 py-0.5 rounded-lg ${isNew ? 'bg-emerald-200' : 'bg-emerald-800'}`}>
-                                <Text className={`text-[10px] font-bold ${isNew ? 'text-emerald-800' : 'text-emerald-200'}`}>
-                                    {item.patient_type || 'STANDARD'}
-                                </Text>
+                            <View className="flex-row items-center">
+                                <TouchableOpacity
+                                    onPress={() => handleOpenChat(item)}
+                                    activeOpacity={0.85}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    className="bg-emerald-600 w-8 h-8 rounded-full items-center justify-center mr-2"
+                                >
+                                    <MessageCircle size={15} color="#ffffff" />
+                                </TouchableOpacity>
+                                <View className={`w-[54px] py-0.5 rounded-lg items-center ${isNew ? 'bg-emerald-200' : 'bg-emerald-800'}`}>
+                                    <Text className={`text-[11px] font-bold text-center ${isNew ? 'text-emerald-800' : 'text-emerald-200'}`}>
+                                        {item.patient_type || 'STANDARD'}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
                     </View>
 
-                    <View className="px-3 py-2.5">
-                        <View className="flex-row items-center mb-1.5">
-                            <View className="w-6 items-center"><Phone size={13} color="#6b7280" /></View>
-                            <Text className="text-gray-600 text-xs font-medium ml-1">{item.phone || 'No phone number'}</Text>
-                        </View>
-
-                        {item.reason ? (
+                    {item.reason ? (
+                        <View className="px-3 py-2.5">
                             <View className="flex-row items-start mb-1.5">
                                 <View className="w-6 items-center mt-0.5"><Stethoscope size={13} color="#6b7280" /></View>
-                                <Text className="text-gray-500 text-xs flex-1 ml-1" numberOfLines={2}>{item.reason}</Text>
+                                <Text className="text-gray-500 text-sm flex-1 ml-1" numberOfLines={2}>{item.reason}</Text>
                             </View>
-                        ) : null}
-
-                        <View className="flex-row mt-1">
-                            <TouchableOpacity
-                                onPress={() => handleOpenChat(item)}
-                                className="flex-1 rounded-lg bg-emerald-600 px-2 py-2 flex-row items-center justify-center mr-1"
-                            >
-                                <MessageCircle size={14} color="#ffffff" />
-                                <Text className="text-white font-semibold text-xs ml-1.5">Chat</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => navigation.navigate('PatientDetails', { patientId: item.patient_id })}
-                                className="flex-1 rounded-lg bg-white border border-emerald-300 px-2 py-2 items-center justify-center ml-1"
-                            >
-                                <Text className="text-emerald-700 font-semibold text-xs">Details</Text>
-                            </TouchableOpacity>
                         </View>
-                    </View>
-                </TouchableOpacity>
+                    ) : null}
+                </View>
             </AnimatedListItem>
         );
     };
@@ -352,7 +351,6 @@ const Patients = () => {
                 />
             </View>
 
-            {/* Add Patient Modal */}
             <Modal
                 animationType="slide"
                 transparent={true}

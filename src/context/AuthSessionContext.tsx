@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { getMe, saveDoctorPushToken, type AuthMeUser } from '../api/auth';
-import { getRole, getToken, removeToken, type AppRole } from '../api/token';
+import { getRole, getToken, removeToken, setRole as setStoredRole, type AppRole } from '../api/token';
 import { registerForPushNotificationsAsync } from '../hooks/usePushNotifications';
 
 type SessionState = {
@@ -135,9 +135,13 @@ export function AuthSessionProvider({
         return;
       }
 
+      await setStoredRole(response.user.role);
       setSession(mapUserToSession(response.user));
       if (response.user.role === 'DOCTOR') {
         await syncPushToken();
+      } else {
+        setPushTokenSyncStatus('idle');
+        setPushTokenSyncMessage('Clinic staff push sync is not used');
       }
     } catch {
       await clearSession();

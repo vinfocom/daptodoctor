@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,10 +16,21 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Stethoscope } from 'lucide-react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ShieldCheck,
+  Stethoscope,
+  RefreshCw,
+  Calculator,
+  Check,
+} from 'lucide-react-native';
+import Animated, { FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
 
-import { login, saveDoctorPushToken } from '../api/auth';
+import { getLoginChallenge, login, saveDoctorPushToken, verifyLoginChallenge } from '../api/auth';
 import { setAuthSession, type AppRole } from '../api/token';
 import { useAuthSession } from '../context/AuthSessionContext';
 import { registerForPushNotificationsAsync } from '../hooks/usePushNotifications';
@@ -48,6 +59,83 @@ export default function LoginScreen() {
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [challengeQuestion, setChallengeQuestion] = useState('');
+  const [challengeId, setChallengeId] = useState('');
+  const [challengeAnswer, setChallengeAnswer] = useState('');
+  const [challengeVerificationToken, setChallengeVerificationToken] = useState('');
+  const [challengeVerified, setChallengeVerified] = useState(false);
+  const [challengeLoading, setChallengeLoading] = useState(false);
+  const [verifyingChallenge, setVerifyingChallenge] = useState(false);
+  const [challengeStatus, setChallengeStatus] = useState<'idle' | 'success'>('idle');
+  const [answerInputActive, setAnswerInputActive] = useState(false);
+
+  const canAttemptLogin = useMemo(
+    () => Boolean(email.trim() && password && challengeAnswer.trim() && challengeVerified),
+    [challengeAnswer, challengeVerified, email, password]
+  );
+
+  const loadLoginChallenge = async (clearAnswer = true) => {
+    setChallengeLoading(true);
+    setChallengeVerified(false);
+    setChallengeVerificationToken('');
+    setChallengeStatus('idle');
+    try {
+      const challenge = await getLoginChallenge();
+      setChallengeQuestion(challenge.question);
+      setChallengeId(challenge.challengeId);
+      if (clearAnswer) {
+        setChallengeAnswer('');
+        setAnswerInputActive(false);
+      }
+    } catch {
+      setChallengeQuestion('');
+      setChallengeId('');
+    } finally {
+      setChallengeLoading(false);
+    }
+  };
+
+  const handleVerifyChallenge = async (answer: string) => {
+    if (!challengeId || !answer.trim() || challengeVerified) return;
+
+    setVerifyingChallenge(true);
+    setChallengeVerified(false);
+    setChallengeVerificationToken('');
+    setChallengeStatus('idle');
+
+    try {
+      const response = await verifyLoginChallenge(challengeId, answer.trim());
+      setChallengeVerificationToken(response?.verificationToken || '');
+      setChallengeVerified(true);
+      setChallengeStatus('success');
+    } catch {
+      setChallengeVerified(false);
+    } finally {
+      setVerifyingChallenge(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadLoginChallenge();
+  }, []);
+
+  useEffect(() => {
+    if (challengeVerified) {
+      setChallengeVerified(false);
+      setChallengeVerificationToken('');
+      setChallengeStatus('idle');
+    }
+  }, [challengeAnswer]);
+
+  useEffect(() => {
+    if (!challengeAnswer.trim() || !challengeId || challengeLoading || challengeVerified) return;
+
+    const timer = setTimeout(() => {
+      void handleVerifyChallenge(challengeAnswer);
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [challengeAnswer, challengeId, challengeLoading, challengeVerified]);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -57,7 +145,12 @@ export default function LoginScreen() {
         return;
       }
 
-      const response = await login(email.trim(), password);
+      if (!challengeId || !challengeVerified || !challengeVerificationToken) {
+        Alert.alert('Verification Required', 'Please solve and verify the calculation before logging in.');
+        return;
+      }
+
+      const response = await login(email.trim(), password, challengeId, challengeVerificationToken);
       const userRole = response?.user?.role as AppRole | undefined;
       if (!response?.token || (userRole !== 'DOCTOR' && userRole !== 'CLINIC_STAFF')) {
         Alert.alert('Error', 'Login failed: Invalid doctor or clinic staff session');
@@ -74,8 +167,16 @@ export default function LoginScreen() {
       const status = error?.response?.status;
       let message = error?.response?.data?.error || 'Login failed. Please check your credentials and try again.';
 
-      if (status === 401 || status === 400 || status === 404) {
+      if (status === 400) {
+        setChallengeVerified(false);
+        await loadLoginChallenge();
+        message = error?.response?.data?.error || 'Verification expired. Please solve the new calculation and try again.';
+      }
+
+      if (status === 401 || status === 404) {
         message = 'Invalid email or password.';
+      } else if (status === 403) {
+        message = error?.response?.data?.error || 'Your account does not currently have login access.';
       } else if (status === 500) {
         message = 'Server error. Please try again later.';
       } else if (!status) {
@@ -134,7 +235,7 @@ export default function LoginScreen() {
 
               <View className="bg-white border border-gray-200 rounded-2xl p-1 mb-5 flex-row">
                 <View className="flex-1 py-2 rounded-xl bg-blue-600">
-                  <Text className="text-center font-semibold text-white">Doctor</Text>
+                  <Text className="text-center font-semibold text-white">Doctor / Staff</Text>
                 </View>
               </View>
 
@@ -169,7 +270,7 @@ export default function LoginScreen() {
                 </View>
               </View>
 
-              <View className="mb-3">
+              <View className="mb-1">
                 <Text className="text-base font-bold text-gray-700 mb-2 ml-1">
                   Password
                 </Text>
@@ -202,12 +303,92 @@ export default function LoginScreen() {
                 </View>
               </View>
 
+              <View className="mb-2">
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text className="text-base font-bold text-gray-700 ml-1">
+                    Quick Verification
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => void loadLoginChallenge()}
+                    disabled={challengeLoading || verifyingChallenge}
+                    className="flex-row items-center"
+                  >
+                    <RefreshCw size={14} color="#2563eb" />
+                  </TouchableOpacity>
+                </View>
+
+                <View className="bg-white border border-blue-100 rounded-2xl px-4 py-3 mb-3">
+                  <View className="flex-row items-center pl-4">
+                    <Calculator size={24} color="#2563eb" />
+                    {challengeLoading ? (
+                      <Text className="text-slate-800 font-bold text-2xl ml-3">
+                        Loading calculation...
+                      </Text>
+                    ) : challengeQuestion ? (
+                      <>
+                        <Text className="text-slate-800 font-bold text-[28px] ml-4 mr-1">
+                          {challengeQuestion.replace('?', '')}
+                        </Text>
+                        {challengeAnswer === '' && !answerInputActive && !challengeVerified ? (
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            onPress={() => setAnswerInputActive(true)}
+                            className="w-[112px] h-[56px] bg-white items-center justify-center ml-5 mr-1 px-2 rounded-2xl border border-blue-200"
+                          >
+                            <Text className="text-[28px] font-bold text-gray-400">?</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <TextInput
+                            autoFocus={answerInputActive && !challengeVerified}
+                            className="w-[112px] h-[56px] bg-white text-center text-[28px] font-bold text-slate-800 ml-5 mr-1 px-2 rounded-2xl border border-blue-200"
+                            placeholder="?"
+                            placeholderTextColor="#9ca3af"
+                            value={challengeAnswer}
+                            onChangeText={(text) => {
+                              setChallengeAnswer(text);
+                              if (text === '' && !challengeVerified) {
+                                setAnswerInputActive(false);
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!challengeAnswer && !challengeVerified) {
+                                setAnswerInputActive(false);
+                              }
+                            }}
+                            keyboardType="number-pad"
+                            maxLength={4}
+                            editable={!challengeLoading && !challengeVerified}
+                            style={{ textAlign: 'center', lineHeight: 32 }}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <Text className="text-slate-800 font-bold text-2xl ml-3">
+                        Calculation unavailable
+                      </Text>
+                    )}
+                    <View className="ml-1 w-9 h-9 items-center justify-center">
+                      {verifyingChallenge ? (
+                        <ActivityIndicator color="#2563eb" size="small" />
+                      ) : challengeStatus === 'success' ? (
+                        <Animated.View
+                          entering={ZoomIn.duration(220)}
+                          className="w-9 h-9 rounded-xl bg-emerald-500 items-center justify-center"
+                        >
+                          <Check size={18} color="#fff" />
+                        </Animated.View>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+              </View>
+
               <TouchableOpacity
                 onPress={handleLogin}
-                disabled={loading}
+                disabled={loading || !canAttemptLogin}
                 activeOpacity={0.8}
                 className={`rounded-2xl py-5 items-center justify-center ${
-                  loading ? 'bg-blue-300' : 'bg-blue-600'
+                  loading || !canAttemptLogin ? 'bg-blue-300' : 'bg-blue-600'
                 }`}
                 style={{
                   shadowColor: '#1d4ed8',
