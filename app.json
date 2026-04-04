@@ -55,10 +55,14 @@
     ],
     "extra": {
       "apiUrl": "",
-      "socketUrl": ""
+      "socketUrl": "",
+      "eas": {
+        "projectId": "c6f9ce43-4245-4251-a709-41d8107d62b3"
+      }
     },
     "experiments": {
       "reactCompiler": true
-    }
+    },
+    "owner": "harshittripathi"
   }
 }
