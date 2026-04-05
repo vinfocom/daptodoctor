@@ -53,6 +53,10 @@ const AnimatedListItem = ({ children, index }: { children: React.ReactNode, inde
     return <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY }] }}>{children}</Animated.View>;
 };
 
+const MetaSeparator = () => (
+    <View className="w-1 h-1 rounded-full bg-emerald-100 mx-2 self-center" />
+);
+
 const Patients = () => {
     const navigation = useNavigation<NavigationProp<RootStackParamList>>();
     const isFocused = useIsFocused();
@@ -247,10 +251,14 @@ const Patients = () => {
                                 </Text>
                                 <View className="flex-row items-center mt-0.5">
                                     <Text className="text-emerald-100 text-sm">
-                                        {item.gender || 'N/A'} {' • '} {item.age ? `${item.age} yrs` : 'Age N/A'}
+                                        {item.gender || 'N/A'}
+                                    </Text>
+                                    <MetaSeparator />
+                                    <Text className="text-emerald-100 text-sm">
+                                        {item.age ? `${item.age} yrs` : 'Age N/A'}
                                     </Text>
                                     <View className="flex-row items-center ml-2 flex-1">
-                                        <Text className="text-emerald-100 text-sm mr-1">•</Text>
+                                        <MetaSeparator />
                                         <Phone size={10} color="#d1fae5" />
                                         <Text className="text-emerald-100 text-sm ml-1 flex-1" numberOfLines={1}>
                                             {item.phone || 'No phone'}
