@@ -6,6 +6,7 @@ import DoctorAnnouncementsScreen from '../screens/DoctorAnnouncementsScreen';
 import PatientDetailsScreen from '../screens/PatientDetails';
 import ProfileScreen from '../screens/ProfileScreen';
 import LoginScreen from '../screens/LoginScreen';
+import SignupScreen from '../screens/SignupScreen';
 import StaffFormScreen from '../screens/StaffFormScreen';
 import StaffListScreen from '../screens/StaffListScreen';
 import TabNavigator from './TabNavigator';
@@ -28,6 +29,7 @@ export default function AppNavigator({
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} options={{ animation: 'fade' }} />
+      <Stack.Screen name="Signup" component={SignupScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="DoctorMain" component={TabNavigator} options={{ animation: 'fade' }} />
       <Stack.Screen name="Chat" component={ChatScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen

@@ -44,6 +44,27 @@ export const login = async (
   return response.data;
 };
 
+export const doctorSignup = async (data: {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  doctor_name: string;
+  phone: string;
+  whatsapp_number: string;
+  whatsapp_numbers?: string[];
+  specialization: string;
+  registration_no: string;
+  education: string;
+  address: string;
+  gst_number: string;
+  pan_number: string;
+  challengeId: string;
+  challengeVerificationToken: string;
+}) => {
+  const response = await client.post('/doctor-auth/signup', data);
+  return response.data;
+};
+
 export const getMe = async (): Promise<{ user: AuthMeUser }> => {
   const response = await client.get('/auth/me');
   return response.data;

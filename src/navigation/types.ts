@@ -19,6 +19,7 @@ export type MainTabParamList = DoctorTabParamList;
 
 export type DoctorRootStackParamList = {
   Login: undefined;
+  Signup: undefined;
   DoctorMain: NavigatorScreenParams<DoctorTabParamList> | undefined;
   Chat: {
     patientId: number;

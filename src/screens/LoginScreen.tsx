@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Calculator,
   Check,
+  UserPlus,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
 
@@ -499,6 +500,15 @@ export default function LoginScreen() {
                 </Text>
               </View>
             </View>
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Signup')}
+              className="mt-4 self-center flex-row items-center"
+              activeOpacity={0.8}
+            >
+              <UserPlus size={16} color="#2563eb" />
+              <Text className="text-blue-600 font-semibold ml-2">New doctor? Create account</Text>
+            </TouchableOpacity>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
