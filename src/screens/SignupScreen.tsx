@@ -19,6 +19,8 @@ import {
   ArrowRight,
   Calculator,
   Check,
+  ChevronDown,
+  ChevronUp,
   Eye,
   EyeOff,
   Lock,
@@ -46,6 +48,7 @@ export default function SignupScreen() {
   const [email, setEmail] = useState('');
   const [doctorName, setDoctorName] = useState('');
   const [phone, setPhone] = useState('');
+  const [numClinics, setNumClinics] = useState(1);
   const [whatsappNumbers, setWhatsappNumbers] = useState<string[]>(['']);
   const [specialization, setSpecialization] = useState('');
   const [registrationNo, setRegistrationNo] = useState('');
@@ -217,6 +220,7 @@ export default function SignupScreen() {
         confirmPassword,
         doctor_name: doctorName.trim(),
         phone: phone.trim(),
+        num_clinics: numClinics,
         whatsapp_number: primaryWhatsappNumber,
         whatsapp_numbers: whatsappNumbers.map((value) => value.trim()).filter(Boolean),
         specialization: specialization.trim(),
@@ -545,6 +549,35 @@ export default function SignupScreen() {
                   >
                     <Text className="text-blue-600 font-semibold">Add another WhatsApp number</Text>
                   </TouchableOpacity>
+                </View>
+
+                <View className="mb-3">
+                  <View className="mb-2 ml-1 flex-row items-center justify-between">
+                    <Text className="text-base font-bold text-gray-700">Number of Clinics</Text>
+                    <Text className="text-[11px] text-gray-500">You can change it later.</Text>
+                  </View>
+                  <View className="flex-row items-center justify-between bg-white rounded-xl px-3.5 py-2 border-2 border-gray-200">
+                    <View className="flex-1 pr-2">
+                      <Text className="text-slate-800 text-lg font-bold">{numClinics}</Text>
+                    </View>
+                    <View className="rounded-xl overflow-hidden border border-gray-200">
+                      <TouchableOpacity
+                        onPress={() => setNumClinics((prev) => Math.min(prev + 1, 99))}
+                        className="w-9 h-7 bg-gray-50 items-center justify-center"
+                        activeOpacity={0.8}
+                      >
+                        <ChevronUp size={16} color="#475569" />
+                      </TouchableOpacity>
+                      <View className="h-px bg-gray-200" />
+                      <TouchableOpacity
+                        onPress={() => setNumClinics((prev) => Math.max(prev - 1, 0))}
+                        className="w-9 h-7 bg-gray-50 items-center justify-center"
+                        activeOpacity={0.8}
+                      >
+                        <ChevronDown size={16} color="#475569" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 </View>
 
                 {renderContinueBackButtons({

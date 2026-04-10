@@ -50,6 +50,7 @@ export const doctorSignup = async (data: {
   confirmPassword: string;
   doctor_name: string;
   phone: string;
+  num_clinics: number;
   whatsapp_number: string;
   whatsapp_numbers?: string[];
   specialization: string;
