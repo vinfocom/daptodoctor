@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StatusBar,
@@ -18,33 +19,41 @@ import {
   ArrowLeft,
   ArrowRight,
   Calculator,
+  Camera,
   Check,
   ChevronDown,
   ChevronUp,
   Eye,
   EyeOff,
+  FileText,
   Lock,
   Mail,
   RefreshCw,
   ShieldCheck,
   Stethoscope,
+  Upload,
   User,
+  X,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 import {
   doctorSignup,
   getLoginChallenge,
   verifyLoginChallenge,
 } from '../api/auth';
+import { uploadDoctorSignupDocument } from '../api/uploads';
 import type { DoctorRootStackParamList } from '../navigation/types';
 
 type SignupScreenNavigationProp = NativeStackNavigationProp<DoctorRootStackParamList, 'Signup'>;
 
 export default function SignupScreen() {
   const navigation = useNavigation<SignupScreenNavigationProp>();
+  const allowedDocumentMimeTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [email, setEmail] = useState('');
   const [doctorName, setDoctorName] = useState('');
   const [phone, setPhone] = useState('');
@@ -53,6 +62,8 @@ export default function SignupScreen() {
   const [specialization, setSpecialization] = useState('');
   const [registrationNo, setRegistrationNo] = useState('');
   const [education, setEducation] = useState('');
+  const [documentUrl, setDocumentUrl] = useState('');
+  const [documentMimeType, setDocumentMimeType] = useState('');
   const [address, setAddress] = useState('');
   const [gstNumber, setGstNumber] = useState('');
   const [panNumber, setPanNumber] = useState('');
@@ -61,6 +72,7 @@ export default function SignupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingDocumentSource, setUploadingDocumentSource] = useState<'camera' | 'file' | null>(null);
   const [challengeQuestion, setChallengeQuestion] = useState('');
   const [challengeId, setChallengeId] = useState('');
   const [challengeAnswer, setChallengeAnswer] = useState('');
@@ -82,21 +94,23 @@ export default function SignupScreen() {
 
   const canContinueStep3 = useMemo(() => hasWhatsappNumber, [hasWhatsappNumber]);
 
-  const canSubmit = useMemo(
+  const canContinueStep4 = useMemo(
     () =>
       Boolean(
-          specialization.trim() &&
-          registrationNo.trim() &&
-          education.trim() &&
-          address.trim()
+        specialization.trim() &&
+        registrationNo.trim() &&
+        education.trim() &&
+        documentUrl.trim()
       ),
     [
-      address,
+      documentUrl,
       education,
       registrationNo,
       specialization,
     ]
   );
+
+  const canSubmit = useMemo(() => Boolean(address.trim()), [address]);
 
   const loadLoginChallenge = async (clearAnswer = true) => {
     setChallengeLoading(true);
@@ -194,7 +208,7 @@ export default function SignupScreen() {
 
       const primaryWhatsappNumber = whatsappNumbers.find((value) => value.trim())?.trim() || '';
 
-      if (!primaryWhatsappNumber || !specialization.trim() || !registrationNo.trim() || !education.trim() || !address.trim()) {
+      if (!primaryWhatsappNumber || !specialization.trim() || !registrationNo.trim() || !education.trim() || !documentUrl.trim() || !address.trim()) {
         Alert.alert('Error', 'Please fill all mandatory doctor details');
         return;
       }
@@ -226,6 +240,7 @@ export default function SignupScreen() {
         specialization: specialization.trim(),
         registration_no: registrationNo.trim(),
         education: education.trim(),
+        document_url: documentUrl.trim(),
         address: address.trim(),
         gst_number: gstNumber.trim(),
         pan_number: panNumber.trim(),
@@ -263,6 +278,93 @@ export default function SignupScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const uploadSignupDocument = async (file: { uri: string; name: string; mimeType: string }) => {
+    if (!challengeId || !challengeVerified || !challengeVerificationToken) {
+      Alert.alert('Verification Required', 'Please verify the calculation before uploading a document.');
+      return;
+    }
+
+    if (!allowedDocumentMimeTypes.includes(file.mimeType)) {
+      Alert.alert('Unsupported File', 'Only PDF, JPG, PNG, and WEBP files are allowed.');
+      return;
+    }
+
+    try {
+      const uploaded = await uploadDoctorSignupDocument({
+        uri: file.uri,
+        name: file.name,
+        mimeType: file.mimeType,
+        challengeId,
+        challengeVerificationToken,
+      });
+      setDocumentUrl(uploaded.url);
+      setDocumentMimeType(uploaded.mimeType || file.mimeType);
+    } catch (error: any) {
+      Alert.alert('Upload Failed', error?.message || 'Unable to upload degree document.');
+    } finally {
+      setUploadingDocumentSource(null);
+    }
+  };
+
+  const handleDocumentCamera = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission Required', 'Please allow camera access to capture your degree document.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    setUploadingDocumentSource('camera');
+    await uploadSignupDocument({
+      uri: asset.uri,
+      name: asset.fileName || `degree-${Date.now()}.jpg`,
+      mimeType: asset.mimeType || 'image/jpeg',
+    });
+  };
+
+  const handleDocumentFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: allowedDocumentMimeTypes,
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    setUploadingDocumentSource('file');
+    await uploadSignupDocument({
+      uri: asset.uri,
+      name: asset.name || `degree-${Date.now()}.pdf`,
+      mimeType: asset.mimeType || 'application/pdf',
+    });
+  };
+
+  const openUploadedDocument = async () => {
+    if (!documentUrl) {
+      Alert.alert('No Document', 'Please upload your education or degree proof first.');
+      return;
+    }
+
+    const canOpen = await Linking.canOpenURL(documentUrl);
+    if (!canOpen) {
+      Alert.alert('Unable to Open', 'This uploaded document cannot be opened on your device.');
+      return;
+    }
+
+    await Linking.openURL(documentUrl);
+  };
+
+  const clearUploadedDocument = () => {
+    setDocumentUrl('');
+    setDocumentMimeType('');
   };
 
   const renderInput = (
@@ -586,15 +688,106 @@ export default function SignupScreen() {
                   continueDisabled: !canContinueStep3,
                 })}
               </>
-            ) : (
+            ) : step === 4 ? (
               <>
                 {renderInput('Specialization', specialization, setSpecialization, 'Cardiology')}
                 {renderInput('Registration Number', registrationNo, setRegistrationNo, 'Medical registration number')}
                 {renderInput('Education', education, setEducation, 'MBBS, MD')}
-                {renderInput('Address', address, setAddress, 'Clinic or residence address')}
+
+                <View className="mb-4 overflow-hidden rounded-[26px] border border-blue-100 bg-white">
+                  <View className="bg-blue-600 px-4 py-3">
+                    <Text className="text-white text-base font-extrabold">Education / Degree Proof</Text>
+                    <Text className="mt-1 text-xs text-blue-100">
+                      Upload a clear image or PDF of your degree certificate before continuing.
+                    </Text>
+                  </View>
+
+                  <View className="px-4 py-4">
+                    <View className="rounded-2xl border border-dashed border-blue-200 bg-blue-50 px-4 py-4">
+                      <View className="flex-row items-start">
+                        <View className="mr-3 mt-0.5 h-11 w-11 items-center justify-center rounded-2xl bg-white">
+                          <FileText size={20} color="#2563eb" />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-base font-bold text-slate-800">
+                            {documentUrl ? 'Document uploaded successfully' : 'Upload your supporting document'}
+                          </Text>
+                          <Text className="mt-1 text-xs leading-5 text-slate-500">
+                            {documentUrl
+                              ? 'Your education proof is attached and ready for submission.'
+                              : 'Accepted formats: PDF, JPG, PNG, WEBP. Maximum size: 10 MB.'}
+                          </Text>
+                          {documentUrl ? (
+                            <Text className="mt-2 text-[11px] font-semibold text-blue-700">
+                              {documentMimeType ? documentMimeType.toUpperCase() : 'DOCUMENT READY'}
+                            </Text>
+                          ) : null}
+                        </View>
+                        {documentUrl ? (
+                          <TouchableOpacity
+                            onPress={clearUploadedDocument}
+                            activeOpacity={0.85}
+                            className="ml-3 h-8 w-8 items-center justify-center rounded-full bg-white"
+                          >
+                            <X size={14} color="#64748b" />
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+
+                      <View className="mt-4 flex-row items-center gap-3">
+                        <TouchableOpacity
+                          onPress={() => {
+                            void handleDocumentCamera();
+                          }}
+                          disabled={uploadingDocumentSource !== null}
+                          activeOpacity={0.85}
+                          className="flex-1 flex-row items-center justify-center rounded-2xl bg-white py-3"
+                        >
+                          {uploadingDocumentSource === 'camera' ? <ActivityIndicator size="small" color="#2563eb" /> : <Camera size={16} color="#2563eb" />}
+                          <Text className="ml-2 text-sm font-bold text-blue-700">Camera</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => {
+                            void handleDocumentFile();
+                          }}
+                          disabled={uploadingDocumentSource !== null}
+                          activeOpacity={0.85}
+                          className="flex-1 flex-row items-center justify-center rounded-2xl bg-blue-600 py-3"
+                        >
+                          {uploadingDocumentSource === 'file' ? <ActivityIndicator size="small" color="#ffffff" /> : <Upload size={16} color="#ffffff" />}
+                          <Text className="ml-2 text-sm font-bold text-white">Files</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {documentUrl ? (
+                        <TouchableOpacity
+                          onPress={() => {
+                            void openUploadedDocument();
+                          }}
+                          activeOpacity={0.85}
+                          className="mt-3 items-center rounded-2xl border border-blue-200 bg-white py-3"
+                        >
+                          <Text className="text-sm font-semibold text-blue-700">Open uploaded document</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
 
                 {renderContinueBackButtons({
                   onBack: () => setStep(3),
+                  onContinue: () => setStep(5),
+                  continueDisabled: !canContinueStep4,
+                })}
+              </>
+            ) : (
+              <>
+                {renderInput('Address', address, setAddress, 'Clinic or residence address')}
+                {renderInput('PAN Number (Optional)', panNumber, setPanNumber, 'ABCDE1234F')}
+
+                {renderContinueBackButtons({
+                  onBack: () => setStep(4),
                   onContinue: handleSignup,
                   continueDisabled: loading || !canSubmit,
                   continueLabel: 'Submit Your Profile',

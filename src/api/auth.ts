@@ -56,6 +56,7 @@ export const doctorSignup = async (data: {
   specialization: string;
   registration_no: string;
   education: string;
+  document_url: string;
   address: string;
   gst_number: string;
   pan_number: string;
